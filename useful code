@@ -1,0 +1,117 @@
+def train_one_epoch(model, loss_func, optimizer, train_dl):
+    """
+    Train the model for one epoch.
+
+    Args:
+        model (torch.nn.Module): Model to be trained.
+        loss_func (callable): Loss function.
+        optimizer (torch.optim.Optimizer): Optimization algorithm.
+        train_dl (DataLoader): Dataloader for the training set.
+
+    Returns:
+        float: Average training loss over the entire epoch.
+    """
+    model.train()  # Set model to training mode
+    total_loss = 0.0
+
+    for xb, yb in tqdm(train_dl, desc="Training"):
+        # Move data to the appropriate device
+        xb, yb = xb.to(device), yb.to(device)
+
+        # Forward pass
+        preds = model(xb)
+        loss = loss_func(preds, yb)
+
+        # Accumulate loss
+        total_loss += loss.item()
+
+        # Backpropagation
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+    # Return the average loss
+    return total_loss / len(train_dl)
+
+
+def validate(model, loss_func, valid_dl):
+    """
+    Validate the model on a given validation set.
+
+    Args:
+        model (torch.nn.Module): Model to be validated.
+        loss_func (callable): Loss function.
+        valid_dl (DataLoader): Dataloader for the validation set.
+
+    Returns:
+        float: Average validation loss over the entire validation set.
+        float: Accuracy of the model on the validation set (0 to 1).
+    """
+    model.eval()  # Set model to evaluation mode
+    total_loss = 0.0
+    total_correct = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for xb, yb in tqdm(valid_dl, desc="Validation"):
+            # Move data to the appropriate device
+            xb, yb = xb.to(device), yb.to(device)
+
+            # Forward pass
+            preds = model(xb)
+            loss = loss_func(preds, yb)
+            total_loss += loss.item()
+
+            # Compute accuracy
+            _, predicted_labels = torch.max(preds, dim=-1)
+            total_correct += (predicted_labels == yb).sum().item()
+            total_samples += xb.size(0)
+
+    avg_loss = total_loss / len(valid_dl)
+    accuracy = total_correct / total_samples
+    return avg_loss, accuracy
+
+
+def fit(epochs, model, loss_func, optimizer, train_dl, valid_dl):
+    """
+    Train and validate a model over a specified number of epochs.
+
+    Args:
+        epochs (int): Number of epochs to train.
+        model (torch.nn.Module): Model to be trained and validated.
+        loss_func (callable): Loss function (e.g., nn.CrossEntropyLoss()).
+        optimizer (torch.optim.Optimizer): Optimization algorithm (e.g., SGD).
+        train_dl (DataLoader): Dataloader for the training set.
+        valid_dl (DataLoader): Dataloader for the validation set.
+
+    Returns:
+        tuple:
+            - train_losses (list of float): Average training losses per epoch.
+            - val_losses (list of float): Average validation losses per epoch.
+            - valid_accuracies (list of float): Validation accuracies per epoch.
+    """
+    train_losses = []
+    val_losses = []
+    valid_accuracies = []
+
+    for epoch in range(epochs):
+        print(f"\nEpoch {epoch+1}/{epochs}")
+
+        # Train for one epoch
+        train_loss = train_one_epoch(model, loss_func, optimizer, train_dl)
+
+        # Validate after the epoch
+        val_loss, val_acc = validate(model, loss_func, valid_dl)
+
+        # Store metrics
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+        valid_accuracies.append(val_acc)
+
+        # Print a summary for quick reference
+        print(f"Epoch {epoch+1} -> "
+              f"Train Loss: {train_loss:.4f} | "
+              f"Val Loss: {val_loss:.4f} | "
+              f"Val Acc: {val_acc:.4f}")
+
+    return train_losses, val_losses, valid_accuracies
